@@ -23,6 +23,38 @@ chmod +x /usr/local/bin/youtrack-cli
 
 ---
 
+## 📂 Project Structure
+
+This project follows a standard Go application layout, leveraging the Cobra framework for command-line interface management. The codebase is structured to separate CLI concerns from core business logic, enhancing maintainability and scalability.
+
+```
+youtrack-cli/
+├─ cmd/                  # Cobra Commands
+│  ├─ root.go            # Defines the root command and initializes all subcommands.
+│  ├─ list.go            # Implements the 'youtrack-cli list' command for listing issues.
+│  ├─ board.go           # Implements the 'youtrack-cli board' commands (e.g., 'list').
+│  ├─ sprint.go          # Implements the 'youtrack-cli sprint' commands (e.g., 'list').
+│  ├─ config/            # Commands for managing CLI configuration.
+│  │  ├─ set.go          # Implements 'youtrack-cli config set'.
+│  │  ├─ view.go         # Implements 'youtrack-cli config view' (raw config).
+│  │  └─ show.go         # Implements 'youtrack-cli config show' (masked config).
+│  ├─ work/              # Commands for managing work items.
+│  │  ├─ add.go          # Implements 'youtrack-cli work add'.
+│  │  └─ check.go        # Implements 'youtrack-cli work check'.
+│  └─ helpers.go         # Shared flags or utility functions specific to Cobra commands.
+├─ internal/             # Internal application logic (not exposed as a public API).
+│  ├─ youtrack/          # Core logic for interacting with YouTrack API.
+│  │  ├─ client.go       # Handles HTTP requests to YouTrack, including common GET/POST methods.
+│  │  ├─ models.go       # Defines Go structs for YouTrack API data models (e.g., Issue, Sprint).
+│  │  └─ sprint.go       # Contains algorithms for determining the current/latest sprint.
+│  └─ config/            # Handles reading from and writing to the ~/.youtrack-cli.yaml configuration file.
+│     └─ file.go         # Implements configuration loading, saving, and value setting.
+├─ go.mod                # Go module definition and dependency management.
+└─ main.go               # The application's entry point, simply calls cmd.Execute().
+```
+
+---
+
 ## ⚙️ Configuration
 
 Before using the tool, configure your YouTrack URL and API Token:
