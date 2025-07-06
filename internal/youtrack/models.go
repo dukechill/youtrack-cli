@@ -8,16 +8,11 @@ type Issue struct {
 	Summary      string        `json:"summary"`
 	CustomFields []CustomField `json:"customFields"`
 	Sprints      []Sprint      `json:"sprints,omitempty"` // Populated by separate API call
-	Assignee     *Assignee     `json:"assignee,omitempty"`
 }
 
-type Assignee struct {
-	FullName string `json:"fullName"`
-	Login    string `json:"login"`
-}
 type CustomField struct {
-	Name  string `json:"name"`
-	Value any    `json:"value"`
+	Name  string      `json:"name"`
+	Value interface{} `json:"value"`
 }
 
 type AgileBoard struct {
@@ -29,10 +24,10 @@ type Sprint struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	// Add other relevant sprint fields if needed for sorting/filtering
-	Start      int64 `json:"start"`
-	Finish     int64 `json:"finish"`
-	IsArchived bool  `json:"archived"`
-	IsCurrent  bool  `json:"isCurrent"` // YouTrack API might have this
+	Start  int64  `json:"start"`  // 新增：Sprint 開始時間 (Unix timestamp in milliseconds)
+	Finish int64  `json:"finish"` // 新增：Sprint 結束時間 (Unix timestamp in milliseconds)
+	// IsArchived bool `json:"archived"`
+	// IsCurrent  bool `json:"isCurrent"` // YouTrack API might have this
 }
 
 type WorkItem struct {

@@ -9,9 +9,9 @@ import (
 )
 
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List your YouTrack issues",
-	Long:  `List YouTrack issues based on various filters like sprint, assignee, etc.`,
+	Use:	"list",
+	Short:	"List your YouTrack issues",
+	Long:	`List YouTrack issues based on various filters like sprint, assignee, type, etc.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg, err := config.Load()
 		if err != nil {
@@ -21,6 +21,7 @@ var listCmd = &cobra.Command{
 
 		sprintName, _ := cmd.Flags().GetString("sprint")
 		assigneeName, _ := cmd.Flags().GetString("assignee")
+		issueType, _ := cmd.Flags().GetString("type") // 新增：讀取 --type 旗標
 
 		// Determine sprint name (flag > default config > latest sprint)
 		determinedSprint, err := youtrack.DetermineSprint(cfg, sprintName)
@@ -30,7 +31,8 @@ var listCmd = &cobra.Command{
 		}
 
 		// Build YouTrack query string
-		query := youtrack.BuildQuery(determinedSprint, assigneeName, cfg.BoardName)
+		// 新增：傳遞 issueType 參數
+		query := youtrack.BuildQuery(determinedSprint, assigneeName, issueType, cfg.BoardName)
 
 		// Fetch issues from YouTrack API
 		issues, err := youtrack.FetchIssues(cfg, query)
@@ -41,6 +43,10 @@ var listCmd = &cobra.Command{
 
 		// Print issues in a formatted table
 		youtrack.PrintIssues(issues)
+
+		// 新增：計算並顯示總估時
+		totalEstimation := youtrack.SumEstimation(issues)
+		fmt.Printf("\nTotal Estimation: %s\n", youtrack.HumanizeDuration(totalEstimation))
 	},
 }
 
@@ -50,4 +56,5 @@ func init() {
 	// Define flags for the list command
 	listCmd.Flags().StringP("sprint", "s", "", "Specify the sprint to list issues from")
 	listCmd.Flags().StringP("assignee", "a", "", "Specify the assignee to list issues for (e.g., 'me', 'unassigned', or a username)")
+	listCmd.Flags().StringP("type", "t", "", "Filter issues by Type (e.g., 'Task', 'Bug', 'Story')") // 新增：--type 旗標
 }

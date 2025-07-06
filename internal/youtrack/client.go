@@ -7,16 +7,18 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"                      // Added missing import
-	"youtrack-cli/internal/config" // Import config package
+	"regexp" // 新增：用於解析估時字串
+	"strconv" // 新增：用於解析估時字串
+	"strings"
+	"youtrack-cli/internal/config"
 
-	"time" // For http.Client timeout
+	"time"
 )
 
 // Client represents a YouTrack API client.
 type Client struct {
-	BaseURL    string
-	Token      string
+	BaseURL string
+	Token   string
 	HTTPClient *http.Client
 }
 
@@ -97,14 +99,12 @@ func (c *Client) post(path string, body interface{}, v interface{}) error {
 	return nil
 }
 
-// --- YouTrack API specific functions (moved from main.go) ---
+// --- YouTrack API specific functions ---
 
 // FetchIssues fetches YouTrack issues based on a query.
 func FetchIssues(cfg config.Config, query string) ([]Issue, error) {
 	client := NewClient(cfg)
-	fields := "idReadable,summary," +
-		"customFields(name,value(login,fullName,presentation,name))," + // ⭐ 增加 login/fullName
-		"assignee(fullName,login)"
+	fields := "idReadable,summary,customFields(name,value(login,fullName,presentation,name)),assignee(fullName,login)"
 	encodedQuery := url.QueryEscape(query)
 	path := fmt.Sprintf("/api/issues?fields=%s&query=%s", fields, encodedQuery)
 
@@ -232,11 +232,12 @@ func CheckWork(cfg config.Config) ([]string, error) {
 // BuildQuery constructs the YouTrack query string.
 // sprintName 可為 ""；assigneeName 建議支援 "me" / "unassigned" / 指定使用者。
 // boardName 必須有值才能使用 sprint 過濾。
-func BuildQuery(sprintName, assigneeName, boardName string) string {
+// 新增：issueType 參數
+func BuildQuery(sprintName, assigneeName, issueType, boardName string) string {
 	var parts []string
 
-	// 1) 預設只顯示自己的票
-	if assigneeName == "" {
+	// 1) 處理指派人過濾
+	if assigneeName == "" { // 如果沒有指定指派人，預設為 for:me
 		parts = append(parts, "for:me")
 	} else if assigneeName == "me" {
 		parts = append(parts, "for:me")
@@ -246,20 +247,31 @@ func BuildQuery(sprintName, assigneeName, boardName string) string {
 		parts = append(parts, fmt.Sprintf("for: %s", assigneeName))
 	}
 
-	// 2) Sprint 過濾（沒有任何雙引號）
+	// 2) 處理 Type 過濾
+	if issueType != "" {
+		parts = append(parts, fmt.Sprintf("Type: %s", issueType))
+	}
+
+	// 3) 處理 Sprint 過濾
 	if sprintName != "" {
 		if boardName == "" {
 			fmt.Println("Error: Board name is not configured. Use `youtrack-cli config set board ...`")
-			return strings.Join(parts, " ")
+			return strings.Join(parts, " ") // 如果沒有 boardName，則不進行 sprint 過濾
 		}
-		boardPart := fmt.Sprintf("Board %s:", boardName) // ← 刪掉雙引號
-		sprintPart := fmt.Sprintf("{%s}", sprintName)    // ← 也不要雙引號
+		// YouTrack 查詢語法中，Board 和 Sprint 名稱如果包含空格，需要用雙引號包起來
+		// 但在 BuildQuery 內部，我們只構建語法，不進行 URL 編碼
+		boardPart := fmt.Sprintf("Board %s:", boardName) // 退回變更：移除雙引號
+		sprintPart := fmt.Sprintf("{%s}", sprintName)    // 退回變更：移除雙引號
 		parts = append(parts, boardPart+" "+sprintPart)
 	}
 
-	return strings.Join(parts, " ")
+	query := strings.Join(parts, " ")
+	fmt.Println("Debug Query:", query) // 保留除錯輸出
+
+	return query
 }
 
+// PrintIssues prints YouTrack issues in a formatted table.
 func PrintIssues(issues []Issue) {
 	header := "%-15s\t%-10s\t%-15s\t%-12s\t%-12s\t%-15s\t%-20s\t%s\n"
 	row := "%-15s\t%-10s\t%-15s\t%-12s\t%-12s\t%-15s\t%-20s\t%s\n"
@@ -270,11 +282,9 @@ func PrintIssues(issues []Issue) {
 
 		// ---------- 1. 先抓 Assignee ----------
 		assignee := "unassigned"
-		if iss.Assignee != nil && iss.Assignee.FullName != "" {
-			assignee = iss.Assignee.FullName
-		}
-
-		// 有些專案把指派人做成 Custom Field，名稱可能是 Assignee、Assignee(s)
+		// 這裡的 iss.Assignee 是 Issue 結構體中的 Assignee 欄位
+		// 根據 models.go，Issue 結構體沒有 Assignee 欄位
+		// 而是透過 customFields 或直接在 FetchIssues 中處理
 		for _, cf := range iss.CustomFields {
 			if cf.Name == "Assignee" || cf.Name == "Assignee(s)" {
 				if names := extractAssigneeNames(cf.Value); len(names) > 0 {
@@ -372,4 +382,85 @@ func PrintSprints(boardName string, sprints []Sprint) {
 	for _, sprint := range sprints {
 		fmt.Println(sprint.Name)
 	}
+}
+
+// parseEstimation parses a YouTrack estimation string (e.g., "3h", "2d 4h", "45m") into a time.Duration.
+// Assumes 1d = 6h.
+func parseEstimation(str string) time.Duration {
+	var totalDuration time.Duration
+
+	// Regex to find days, hours, and minutes
+	re := regexp.MustCompile(`(\d+)(d|h|m)`)
+	matches := re.FindAllStringSubmatch(str, -1)
+
+	for _, match := range matches {
+		value, err := strconv.Atoi(match[1])
+		if err != nil {
+			continue // Skip if value is not a valid number
+		}
+		unit := match[2]
+
+		switch unit {
+		case "d":
+			totalDuration += time.Duration(value*6) * time.Hour // 1 day = 6 hours
+		case "h":
+			totalDuration += time.Duration(value) * time.Hour
+		case "m":
+			totalDuration += time.Duration(value) * time.Minute
+		}
+	}
+	return totalDuration
+}
+
+// SumEstimation calculates the total estimation from a slice of Issues.
+func SumEstimation(issues []Issue) time.Duration {
+	var total time.Duration
+	for _, issue := range issues {
+		for _, cf := range issue.CustomFields {
+			if cf.Name == "Estimation" {
+				if cf.Value != nil {
+					// YouTrack API returns PeriodValue as a map with "presentation" key
+					if valMap, ok := cf.Value.(map[string]interface{}); ok {
+						if presentation, ok := valMap["presentation"].(string); ok {
+							total += parseEstimation(presentation)
+						}
+					}
+				}
+				break // Found Estimation, move to next issue
+			}
+		}
+	}
+	return total
+}
+
+// HumanizeDuration converts a time.Duration into a human-readable string (e.g., "1d 3h 45m").
+// Assumes 1d = 6h for display purposes.
+func HumanizeDuration(d time.Duration) string {
+	if d == 0 {
+		return "0m"
+	}
+
+	var parts []string
+
+	// Calculate days (1d = 6h)
+	totalHours := int(d.Hours())
+	days := totalHours / 6
+	if days > 0 {
+		parts = append(parts, fmt.Sprintf("%dd", days))
+		totalHours %= 6
+	}
+
+	// Calculate remaining hours
+	hours := totalHours
+	if hours > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+	}
+
+	// Calculate remaining minutes
+	minutes := int(d.Minutes()) % 60
+	if minutes > 0 || (len(parts) == 0 && minutes == 0 && d > 0) { // If no larger units, show minutes even if 0, but only if duration is not 0
+		parts = append(parts, fmt.Sprintf("%dm", minutes))
+	}
+
+	return strings.Join(parts, " ")
 }

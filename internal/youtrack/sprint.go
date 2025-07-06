@@ -9,116 +9,69 @@ import (
 	"youtrack-cli/internal/config"
 )
 
-// DetermineSprint 回傳要使用的 Sprint 名稱。
-// 優先序：CLI flag > config.DefaultSprint > 自動偵測。
+// DetermineSprint determines the sprint name to use based on flags, default config, or latest active sprint.
 func DetermineSprint(cfg config.Config, flagSprintName string) (string, error) {
-	// 1) CLI flag 最高
+	// 1. If sprint name is provided via flag, use it directly
 	if flagSprintName != "" {
 		return flagSprintName, nil
 	}
-	// 2) ~/.youtrack-cli.yaml 內的預設
+
+	// 2. If default sprint is configured, use it
 	if cfg.DefaultSprint != "" {
 		return cfg.DefaultSprint, nil
 	}
-	// 3) 自動偵測須先知道 Board 名稱
+
+	// 3. Otherwise, try to find the latest active sprint
 	if cfg.BoardName == "" {
-		return "", fmt.Errorf("board name is not configured, cannot auto-detect sprint")
+		return "", fmt.Errorf("board name is not configured, cannot determine latest sprint")
 	}
 
-	sprints, err := ListSprints(cfg, cfg.BoardName) // 需帶 isCurrent/start/finish
+	sprints, err := ListSprints(cfg, cfg.BoardName)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to list sprints for board '%s': %w", cfg.BoardName, err)
 	}
+
 	if len(sprints) == 0 {
-		return "", fmt.Errorf("no sprint found on board %q", cfg.BoardName)
+		return "", fmt.Errorf("no sprints found for board '%s'", cfg.BoardName)
 	}
 
-	// ────────────────────────────────
-	// Step 1: isCurrent == true
-	for _, sp := range sprints {
-		if sp.IsCurrent {
-			return sp.Name, nil
-		}
-	}
-
-	now := time.Now()
-
-	// Step 2: 日期區間涵蓋今天
-	for _, sp := range sprints {
-		if inRange(sp, now) {
-			return sp.Name, nil
-		}
-	}
-
-	// Step 3: 最近結束的 Sprint
-	var past *Sprint
-	pastDiff := time.Duration(1<<63 - 1)
-	for i := range sprints {
-		sp := &sprints[i]
-		finish := unixMilliToTime(sp.Finish)
-		if finish.IsZero() || now.Before(finish) {
-			continue
-		}
-		if d := now.Sub(finish); d < pastDiff {
-			pastDiff = d
-			past = sp
-		}
-	}
-	if past != nil {
-		return past.Name, nil
-	}
-
-	// Step 4: 即將開始的 Sprint
-	var future *Sprint
-	futureDiff := time.Duration(1<<63 - 1)
-	for i := range sprints {
-		sp := &sprints[i]
-		start := unixMilliToTime(sp.Start)
-		if start.IsZero() || now.After(start) {
-			continue
-		}
-		if d := start.Sub(now); d < futureDiff {
-			futureDiff = d
-			future = sp
-		}
-	}
-	if future != nil {
-		return future.Name, nil
-	}
-
-	// Step 5: 名稱尾數字最大
+	// Heuristic 1: Sort by finish date (descending) if available
+	// This assumes YouTrack API returns valid start/finish dates.
 	sort.Slice(sprints, func(i, j int) bool {
-		return extractNumber(sprints[i].Name) > extractNumber(sprints[j].Name)
+		// Prioritize sprints with valid finish dates
+		if sprints[i].Finish > 0 && sprints[j].Finish > 0 {
+			return sprints[i].Finish > sprints[j].Finish // Newest finish date first
+		} else if sprints[i].Finish > 0 { // i has finish date, j doesn't
+			return true
+		} else if sprints[j].Finish > 0 { // j has finish date, i doesn't
+			return false
+		}
+		// Fallback to sorting by name with numbers if no valid finish dates
+		numI := extractNumberFromName(sprints[i].Name)
+		numJ := extractNumberFromName(sprints[j].Name)
+		if numI != numJ {
+			return numI > numJ // Sort by number descending
+		}
+		return sprints[i].Name > sprints[j].Name // Fallback to alphabetical if numbers are same
 	})
+
 	return sprints[0].Name, nil
 }
 
-/* ───────────────────────────────
-   Helper functions
-   ─────────────────────────────── */
-
-func inRange(sp Sprint, t time.Time) bool {
-	if sp.Start == 0 || sp.Finish == 0 {
-		return false
+// extractNumberFromName extracts a number from a sprint name for sorting.
+func extractNumberFromName(name string) int {
+	re := regexp.MustCompile(`(\d+)$`)
+	matches := re.FindAllString(name, -1)
+	if len(matches) > 0 {
+		num, err := strconv.Atoi(matches[len(matches)-1]) // Take the last number found
+		if err == nil {
+			return num
+		}
 	}
-	start := unixMilliToTime(sp.Start)
-	finish := unixMilliToTime(sp.Finish)
-	return !t.Before(start) && !t.After(finish)
+	return 0 // Default if no number found or error
 }
 
+// Helper to convert Unix milliseconds to time.Time (if Start/Finish are Unix ms)
 func unixMilliToTime(ms int64) time.Time {
-	if ms == 0 {
-		return time.Time{}
-	}
-	return time.UnixMilli(ms)
-}
-
-func extractNumber(name string) int {
-	re := regexp.MustCompile(`\d+`)
-	m := re.FindAllString(name, -1)
-	if len(m) == 0 {
-		return 0
-	}
-	n, _ := strconv.Atoi(m[len(m)-1])
-	return n
+	return time.Unix(ms/1000, (ms%1000)*int64(time.Millisecond))
 }
