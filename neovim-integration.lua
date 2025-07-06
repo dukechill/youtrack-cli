@@ -17,6 +17,16 @@ map("n", "<leader>ya", function()
   vim.cmd("split term://" .. youtrack_executable .. " add-work ")
 end, { desc = "Add YouTrack work item" })
 
+-- Show YouTrack configuration
+map("n", "<leader>yc", function()
+  vim.cmd("split term://" .. youtrack_executable .. " config show")
+end, { desc = "Show YouTrack config" })
+
+-- List YouTrack boards
+map("n", "<leader>yb", function()
+  vim.cmd("split term://" .. youtrack_executable .. " config list-boards")
+end, { desc = "List YouTrack boards" })
+
 
 -- 2. Telescope Integration (e.g., in a new file like ~/.config/nvim/lua/plugins/telescope-youtrack.lua)
 -- This requires the telescope.nvim plugin.
