@@ -1,0 +1,13 @@
+feat(crm): Enhance list command, add config management, and improve sprint handling
+
+This commit introduces a series of significant enhancements and fixes to the youtrack-cli tool:
+
+- **Refactor list command query construction**: The `list` command now dynamically constructs YouTrack queries based on `sprint` and `assignee` parameters. It defaults to `for:me` when no specific filters are provided.
+- **Implement default latest sprint for list command**: When no sprint is explicitly specified, the `list` command now attempts to fetch and use the latest sprint from the configured board, improving usability.
+- **Correct sprint query escaping**: Fixed an issue where sprint names with spaces were incorrectly escaped in YouTrack queries, leading to no results.
+- **Improve sprint display in list output**: The `list` command now correctly fetches and displays sprint information for each issue by making additional API calls to the `/api/issues/{issueId}/sprints` endpoint.
+- **Add config show command**: Introduced `youtrack-cli config show` to display the current configuration, with sensitive API token information partially masked.
+- **Add config list-boards command**: Implemented `youtrack-cli config list-boards` to allow users to list all available Agile Boards from YouTrack.
+- **Update Neovim integration**: Modified `neovim-integration.lua` to include new keymaps (`<leader>yc` for `config show` and `<leader>yb` for `config list-boards`).
+- **Update README.md**: Comprehensive updates to the documentation, covering new commands, updated usage instructions for `list -s`, and a detailed troubleshooting section with `curl` examples.
+- **Dependency updates**: Updated `go.mod` and `go.sum` to reflect changes in dependencies.
