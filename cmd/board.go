@@ -36,6 +36,6 @@ var boardListCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(boardCmd)
+	// rootCmd.AddCommand(boardCmd) // REMOVED: Added in cmd/root.go
 	boardCmd.AddCommand(boardListCmd)
 }

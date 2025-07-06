@@ -46,7 +46,7 @@ var sprintListCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(sprintCmd)
+	// rootCmd.AddCommand(sprintCmd) // REMOVED: Added in cmd/root.go
 	sprintCmd.AddCommand(sprintListCmd)
 
 	// Define flags for the sprint list command

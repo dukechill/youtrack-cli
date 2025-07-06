@@ -8,11 +8,16 @@ type Issue struct {
 	Summary      string        `json:"summary"`
 	CustomFields []CustomField `json:"customFields"`
 	Sprints      []Sprint      `json:"sprints,omitempty"` // Populated by separate API call
+	Assignee     *Assignee     `json:"assignee,omitempty"`
 }
 
+type Assignee struct {
+	FullName string `json:"fullName"`
+	Login    string `json:"login"`
+}
 type CustomField struct {
-	Name  string      `json:"name"`
-	Value interface{} `json:"value"`
+	Name  string `json:"name"`
+	Value any    `json:"value"`
 }
 
 type AgileBoard struct {

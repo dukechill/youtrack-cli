@@ -31,7 +31,7 @@ var listCmd = &cobra.Command{
 
 		// Build YouTrack query string
 		query := youtrack.BuildQuery(determinedSprint, assigneeName, cfg.BoardName)
-		fmt.Println("Debug Query:", query) // ← 新增這行
+
 		// Fetch issues from YouTrack API
 		issues, err := youtrack.FetchIssues(cfg, query)
 		if err != nil {
@@ -45,10 +45,9 @@ var listCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(listCmd)
+	// rootCmd.AddCommand(listCmd) // REMOVED: Added in cmd/root.go
 
 	// Define flags for the list command
 	listCmd.Flags().StringP("sprint", "s", "", "Specify the sprint to list issues from")
 	listCmd.Flags().StringP("assignee", "a", "", "Specify the assignee to list issues for (e.g., 'me', 'unassigned', or a username)")
 }
-
