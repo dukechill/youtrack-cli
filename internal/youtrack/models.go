@@ -21,11 +21,12 @@ type AgileBoard struct {
 }
 
 type Sprint struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	IsCurrent bool   `json:"isCurrent"`
 	// Add other relevant sprint fields if needed for sorting/filtering
-	Start  int64  `json:"start"`  // 新增：Sprint 開始時間 (Unix timestamp in milliseconds)
-	Finish int64  `json:"finish"` // 新增：Sprint 結束時間 (Unix timestamp in milliseconds)
+	Start  int64 `json:"start"`  // 新增：Sprint 開始時間 (Unix timestamp in milliseconds)
+	Finish int64 `json:"finish"` // 新增：Sprint 結束時間 (Unix timestamp in milliseconds)
 	// IsArchived bool `json:"archived"`
 	// IsCurrent  bool `json:"isCurrent"` // YouTrack API might have this
 }

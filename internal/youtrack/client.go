@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp" // 新增：用於解析估時字串
+	"regexp"  // 新增：用於解析估時字串
 	"strconv" // 新增：用於解析估時字串
 	"strings"
 	"youtrack-cli/internal/config"
@@ -15,10 +15,17 @@ import (
 	"time"
 )
 
+type DailySyncOptions struct {
+	Minutes         int
+	Comment         string
+	State           string
+	WorkDescription string
+}
+
 // Client represents a YouTrack API client.
 type Client struct {
-	BaseURL string
-	Token   string
+	BaseURL    string
+	Token      string
 	HTTPClient *http.Client
 }
 
@@ -86,7 +93,7 @@ func (c *Client) post(path string, body interface{}, v interface{}) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API request failed with status %s: %s", resp.Status, string(bodyBytes))
 	}
@@ -163,15 +170,31 @@ func ListSprints(cfg config.Config, boardName string) ([]Sprint, error) {
 		return nil, fmt.Errorf("board '%s' not found", boardName)
 	}
 
-	// Now, get the sprints for that board
 	fields := "id,name,isCurrent,start,finish"
-	path := fmt.Sprintf("/api/agiles/%s/sprints?fields=%s", boardID, fields)
+	const pageSize = 100
+	var allSprints []Sprint
 
-	var sprints []Sprint
-	if err := client.get(path, &sprints); err != nil {
-		return nil, err
+	for skip := 0; ; skip += pageSize {
+		path := fmt.Sprintf(
+			"/api/agiles/%s/sprints?fields=%s&$top=%d&$skip=%d",
+			boardID,
+			fields,
+			pageSize,
+			skip,
+		)
+
+		var page []Sprint
+		if err := client.get(path, &page); err != nil {
+			return nil, err
+		}
+
+		allSprints = append(allSprints, page...)
+		if len(page) < pageSize {
+			break
+		}
 	}
-	return sprints, nil
+
+	return allSprints, nil
 }
 
 // AddWorkItem adds a work item to a YouTrack issue.
@@ -185,6 +208,99 @@ func AddWorkItem(cfg config.Config, issueID, minutes, description string) error 
 	}
 
 	return client.post(path, workItem, nil)
+}
+
+// AddComment adds a comment to a YouTrack issue.
+func AddComment(cfg config.Config, issueID, text string) error {
+	client := NewClient(cfg)
+	path := fmt.Sprintf("/api/issues/%s/comments?fields=id,text", issueID)
+
+	comment := map[string]string{
+		"text": text,
+	}
+
+	return client.post(path, comment, nil)
+}
+
+// UpdateState updates the State field on a YouTrack issue.
+func UpdateState(cfg config.Config, issueID, state string) error {
+	client := NewClient(cfg)
+	path := fmt.Sprintf("/api/issues/%s?fields=idReadable,customFields(name,value(name))", issueID)
+
+	issueUpdate := map[string]interface{}{
+		"customFields": []map[string]interface{}{
+			{
+				"name":  "State",
+				"$type": "StateIssueCustomField",
+				"value": map[string]string{
+					"name": state,
+				},
+			},
+		},
+	}
+
+	return client.post(path, issueUpdate, nil)
+}
+
+// UpdateEstimation updates the Estimation field on a YouTrack issue.
+func UpdateEstimation(cfg config.Config, issueID string, minutes int) error {
+	client := NewClient(cfg)
+	path := fmt.Sprintf("/api/issues/%s?fields=idReadable,customFields(name,value(presentation))", issueID)
+
+	issueUpdate := map[string]interface{}{
+		"customFields": []map[string]interface{}{
+			{
+				"name":  "Estimation",
+				"$type": "PeriodIssueCustomField",
+				"value": map[string]string{
+					"presentation": fmt.Sprintf("%dm", minutes),
+					"$type":        "PeriodValue",
+				},
+			},
+		},
+	}
+
+	return client.post(path, issueUpdate, nil)
+}
+
+// DailySync logs work, adds a comment, and/or updates state for a single issue.
+func DailySync(cfg config.Config, issueID string, opts DailySyncOptions) ([]string, error) {
+	var actions []string
+
+	if opts.Minutes <= 0 && opts.Comment == "" && opts.State == "" {
+		return nil, fmt.Errorf("nothing to do: provide --minutes, --comment, or --state")
+	}
+
+	if opts.Minutes > 0 {
+		workDescription := opts.WorkDescription
+		if workDescription == "" {
+			workDescription = opts.Comment
+		}
+		if workDescription == "" {
+			return nil, fmt.Errorf("work log requires --work or --comment when --minutes is set")
+		}
+
+		if err := AddWorkItem(cfg, issueID, strconv.Itoa(opts.Minutes), workDescription); err != nil {
+			return actions, fmt.Errorf("log work item: %w", err)
+		}
+		actions = append(actions, fmt.Sprintf("logged %d minutes", opts.Minutes))
+	}
+
+	if opts.Comment != "" {
+		if err := AddComment(cfg, issueID, opts.Comment); err != nil {
+			return actions, fmt.Errorf("add comment: %w", err)
+		}
+		actions = append(actions, "added comment")
+	}
+
+	if opts.State != "" {
+		if err := UpdateState(cfg, issueID, opts.State); err != nil {
+			return actions, fmt.Errorf("update state: %w", err)
+		}
+		actions = append(actions, fmt.Sprintf("set state to %s", opts.State))
+	}
+
+	return actions, nil
 }
 
 // CheckWork checks for issues with no work logged today.

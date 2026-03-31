@@ -7,7 +7,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"youtrack-cli/cmd/config" // Import config package
-	"youtrack-cli/cmd/work"   // Import work package
+	issuecmd "youtrack-cli/cmd/issue"
+	"youtrack-cli/cmd/work" // Import work package
 )
 
 var rootCmd = &cobra.Command{
@@ -34,6 +35,7 @@ func init() {
 	rootCmd.AddCommand(boardCmd)
 	rootCmd.AddCommand(sprintCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(issuecmd.IssueCmd)
 	rootCmd.AddCommand(work.WorkCmd) // Add the work root command
 
 	// Here you will define your flags and configuration settings.

@@ -35,8 +35,25 @@ func DetermineSprint(cfg config.Config, flagSprintName string) (string, error) {
 		return "", fmt.Errorf("no sprints found for board '%s'", cfg.BoardName)
 	}
 
-	// Heuristic 1: Sort by finish date (descending) if available
-	// This assumes YouTrack API returns valid start/finish dates.
+	now := time.Now()
+
+	for _, sprint := range sprints {
+		if sprint.IsCurrent {
+			return sprint.Name, nil
+		}
+	}
+
+	for _, sprint := range sprints {
+		if sprint.Start > 0 && sprint.Finish > 0 {
+			start := unixMilliToTime(sprint.Start)
+			finish := unixMilliToTime(sprint.Finish)
+			if !now.Before(start) && !now.After(finish) {
+				return sprint.Name, nil
+			}
+		}
+	}
+
+	// Fallback: sort by finish date (descending) if available.
 	sort.Slice(sprints, func(i, j int) bool {
 		// Prioritize sprints with valid finish dates
 		if sprints[i].Finish > 0 && sprints[j].Finish > 0 {

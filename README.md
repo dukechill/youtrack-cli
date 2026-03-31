@@ -21,6 +21,12 @@ sudo mv youtrack-cli /usr/local/bin/
 chmod +x /usr/local/bin/youtrack-cli
 ```
 
+Or install both the CLI and Codex skill together:
+
+```bash
+./scripts/install.sh
+```
+
 ---
 
 ## 📂 Project Structure
@@ -32,6 +38,11 @@ youtrack-cli/
 ├─ cmd/                  # Cobra Commands
 │  ├─ root.go            # Defines the root command and initializes all subcommands.
 │  ├─ list.go            # Implements the 'youtrack-cli list' command for listing issues.
+│  ├─ issue/             # Implements issue update commands.
+│  │  ├─ comment.go      # Implements 'youtrack-cli issue comment'.
+│  │  ├─ set_estimation.go # Implements 'youtrack-cli issue set-estimation'.
+│  │  ├─ set_state.go    # Implements 'youtrack-cli issue set-state'.
+│  │  └─ daily_sync.go   # Implements 'youtrack-cli issue daily-sync'.
 │  ├─ board.go           # Implements the 'youtrack-cli board' commands (e.g., 'list').
 │  ├─ sprint.go          # Implements the 'youtrack-cli sprint' commands (e.g., 'list').
 │  ├─ config/            # Commands for managing CLI configuration.
@@ -49,6 +60,9 @@ youtrack-cli/
 │  │  └─ sprint.go       # Contains algorithms for determining the current/latest sprint.
 │  └─ config/            # Handles reading from and writing to the ~/.youtrack-cli.yaml configuration file.
 │     └─ file.go         # Implements configuration loading, saving, and value setting.
+├─ skills/               # Repo-managed Codex skills.
+│  └─ youtrack-daily-ops/
+├─ scripts/              # Bootstrap/install helpers.
 ├─ go.mod                # Go module definition and dependency management.
 └─ main.go               # The application's entry point, simply calls cmd.Execute().
 ```
@@ -58,6 +72,12 @@ youtrack-cli/
 ## ⚙️ Configuration
 
 Before using the tool, configure your YouTrack URL and API Token:
+
+You can start from the bundled example config:
+
+```bash
+cp .youtrack-cli.yaml.example ~/.youtrack-cli.yaml
+```
 
 ### Initial Configuration
 
@@ -116,6 +136,27 @@ youtrack-cli sprint list --board "My Agile Board"
 youtrack-cli sprint list
 ```
 
+### Current Sprint Selection
+
+When `youtrack-cli list` is run without `--sprint`, the CLI determines the current sprint in this order:
+
+1. use `config.default_sprint` if configured
+2. use the board sprint marked as `isCurrent`
+3. use the sprint whose `start/finish` window contains the current time
+4. fall back to the latest sprint by finish date
+
+Sprint fetching is paginated, so boards with more than 42 sprints still resolve correctly.
+
+### Codex Skill Installation
+
+The repo includes a Codex skill at `skills/youtrack-daily-ops`.
+
+`./scripts/install.sh` will:
+
+1. build `youtrack-cli` into `~/.local/bin` by default
+2. symlink the skill into `${CODEX_HOME:-~/.codex}/skills/youtrack-daily-ops`
+3. copy `.youtrack-cli.yaml.example` to `~/.youtrack-cli.yaml` if no config exists yet
+
 ---
 
 ## 🧰 Usage
@@ -136,20 +177,47 @@ youtrack-cli list --json
 ### Add Work Item
 
 ```bash
-youtrack-cli add-work [issue-id] [minutes] [description]
+youtrack-cli work add [issue-id] [minutes] [description]
 ```
 
 Example:
 
 ```bash
-youtrack-cli add-work DP-123 60 "Fixed a bug"
+youtrack-cli work add DP-123 60 "Fixed a bug"
 ```
 
 ### Check Work
 
 ```bash
 # Find issues assigned to you without work logged today
-youtrack-cli check-work
+youtrack-cli work check
+```
+
+### Add Issue Comment
+
+```bash
+youtrack-cli issue comment DP-123 "Today: finished API wiring. Next: add tests. Risk: none."
+```
+
+### Update Issue State
+
+```bash
+youtrack-cli issue set-state DP-123 "In Progress"
+```
+
+### Update Issue Estimation
+
+```bash
+youtrack-cli issue set-estimation DP-123 120
+```
+
+### Daily Sync an Issue
+
+```bash
+youtrack-cli issue daily-sync DP-123 \
+  --minutes 60 \
+  --state "In Progress" \
+  --comment "Today: finished API wiring. Next: add tests. Risk: none."
 ```
 
 ---
@@ -238,6 +306,9 @@ If `youtrack-cli` commands are not returning expected results, especially for `l
     Ensure the board and sprint names you are using in `youtrack-cli` commands exactly match those in your YouTrack instance.  
     *   **For Board Names**: Navigate to `Agile Boards` in YouTrack and verify the exact spelling and casing.  
     *   **For Sprint Names**: Go to your specific Agile Board, and check the names of the sprints. Pay close attention to spaces or special characters.
+
+4.  **Current sprint looks stale**:
+    If the CLI seems stuck on an old sprint, run `youtrack-cli sprint list` first and confirm the target sprint exists on the board. The CLI now paginates sprint results and prefers YouTrack's `isCurrent` marker over simple name sorting.
 
 ### Neovim Integration Issues
 
