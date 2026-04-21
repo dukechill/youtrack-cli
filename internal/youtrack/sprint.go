@@ -21,9 +21,13 @@ func DetermineSprint(cfg config.Config, flagSprintName string) (string, error) {
 		return cfg.DefaultSprint, nil
 	}
 
-	// 3. Otherwise, try to find the latest active sprint
+	return DetermineCurrentSprint(cfg)
+}
+
+// DetermineCurrentSprint determines the current sprint for the configured board.
+func DetermineCurrentSprint(cfg config.Config) (string, error) {
 	if cfg.BoardName == "" {
-		return "", fmt.Errorf("board name is not configured, cannot determine latest sprint")
+		return "", fmt.Errorf("board name is not configured, cannot determine current sprint")
 	}
 
 	sprints, err := ListSprints(cfg, cfg.BoardName)

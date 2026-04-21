@@ -197,6 +197,57 @@ func ListSprints(cfg config.Config, boardName string) ([]Sprint, error) {
 	return allSprints, nil
 }
 
+// ListIssueSprints fetches the sprints associated with a single issue.
+func ListIssueSprints(cfg config.Config, issueID string) ([]Sprint, error) {
+	client := NewClient(cfg)
+	path := fmt.Sprintf("/api/issues/%s/sprints?fields=id,name,isCurrent,start,finish,archived", issueID)
+
+	var sprints []Sprint
+	if err := client.get(path, &sprints); err != nil {
+		return nil, err
+	}
+
+	return sprints, nil
+}
+
+// ApplyCommand applies a YouTrack command to one or more issues.
+func ApplyCommand(cfg config.Config, query string, issueIDs []string) error {
+	client := NewClient(cfg)
+
+	issues := make([]map[string]string, 0, len(issueIDs))
+	for _, issueID := range issueIDs {
+		issues = append(issues, map[string]string{"idReadable": issueID})
+	}
+
+	body := map[string]any{
+		"query":  query,
+		"issues": issues,
+	}
+
+	return client.post("/api/commands", body, nil)
+}
+
+// SetIssueSprint assigns an issue to a specific sprint on a board.
+func SetIssueSprint(cfg config.Config, issueID, boardName, sprintName string) error {
+	return SetIssuesSprint(cfg, []string{issueID}, boardName, sprintName)
+}
+
+// SetIssuesSprint assigns one or more issues to a specific sprint on a board.
+func SetIssuesSprint(cfg config.Config, issueIDs []string, boardName, sprintName string) error {
+	if strings.TrimSpace(boardName) == "" {
+		return fmt.Errorf("board name is required")
+	}
+	if strings.TrimSpace(sprintName) == "" {
+		return fmt.Errorf("sprint name is required")
+	}
+	if len(issueIDs) == 0 {
+		return fmt.Errorf("at least one issue id is required")
+	}
+
+	query := fmt.Sprintf("Board %s %s", strconv.Quote(boardName), strconv.Quote(sprintName))
+	return ApplyCommand(cfg, query, issueIDs)
+}
+
 // AddWorkItem adds a work item to a YouTrack issue.
 func AddWorkItem(cfg config.Config, issueID, minutes, description string) error {
 	client := NewClient(cfg)
@@ -496,7 +547,36 @@ func PrintBoards(boards []AgileBoard) {
 func PrintSprints(boardName string, sprints []Sprint) {
 	fmt.Printf("Sprints in board '%s':\n", boardName)
 	for _, sprint := range sprints {
-		fmt.Println(sprint.Name)
+		marker := " "
+		if sprint.IsCurrent {
+			marker = "*"
+		}
+		if sprint.IsCurrent {
+			fmt.Printf("%s %s [current]\n", marker, sprint.Name)
+			continue
+		}
+		fmt.Printf("%s %s\n", marker, sprint.Name)
+	}
+}
+
+// PrintIssueSprints prints the sprint membership for a single issue.
+func PrintIssueSprints(issueID string, sprints []Sprint) {
+	fmt.Printf("Sprints for issue '%s':\n", issueID)
+	if len(sprints) == 0 {
+		fmt.Println("  (none)")
+		return
+	}
+
+	for _, sprint := range sprints {
+		marker := " "
+		if sprint.IsCurrent {
+			marker = "*"
+		}
+		if sprint.IsCurrent {
+			fmt.Printf("%s %s [current]\n", marker, sprint.Name)
+			continue
+		}
+		fmt.Printf("%s %s\n", marker, sprint.Name)
 	}
 }
 

@@ -40,6 +40,7 @@ youtrack-cli/
 │  ├─ list.go            # Implements the 'youtrack-cli list' command for listing issues.
 │  ├─ issue/             # Implements issue update commands.
 │  │  ├─ comment.go      # Implements 'youtrack-cli issue comment'.
+│  │  ├─ sprint.go       # Implements 'youtrack-cli issue sprint ...'.
 │  │  ├─ set_estimation.go # Implements 'youtrack-cli issue set-estimation'.
 │  │  ├─ set_state.go    # Implements 'youtrack-cli issue set-state'.
 │  │  └─ daily_sync.go   # Implements 'youtrack-cli issue daily-sync'.
@@ -136,6 +137,13 @@ youtrack-cli sprint list --board "My Agile Board"
 youtrack-cli sprint list
 ```
 
+Show the current sprint for a board without scanning the full list:
+
+```bash
+youtrack-cli sprint current
+youtrack-cli sprint current --board "My Agile Board"
+```
+
 ### Current Sprint Selection
 
 When `youtrack-cli list` is run without `--sprint`, the CLI determines the current sprint in this order:
@@ -209,6 +217,22 @@ youtrack-cli issue set-state DP-123 "In Progress"
 
 ```bash
 youtrack-cli issue set-estimation DP-123 120
+```
+
+### Inspect or Update Issue Sprint
+
+```bash
+# Show the sprint membership for an issue
+youtrack-cli issue sprint show DP-123
+
+# Move an issue to the current sprint on the configured board
+youtrack-cli issue sprint set DP-123
+
+# Move an issue to a specific sprint on a board
+youtrack-cli issue sprint set DP-123 --board "My Agile Board" --sprint "Sprint 26"
+
+# Move multiple issues in one command
+youtrack-cli issue sprint set CT-4585 CT-4586 CT-4587 --board "CRM促案管理"
 ```
 
 ### Daily Sync an Issue
