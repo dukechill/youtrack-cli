@@ -1,4 +1,4 @@
 interface:
   display_name: "YouTrack Daily Ops"
-  short_description: "Daily YouTrack triage, worklogs, and status updates"
-  default_prompt: "Use $youtrack-daily-ops to review my #dukechiu tickets and prepare or apply today's status and worklog updates."
+  short_description: "Assigned-work inventory, daily triage, worklogs, and status updates"
+  default_prompt: "Use $youtrack-daily-ops to review my #dukechiu assigned work, classify active/pending/waiting tickets, identify each next action, and recommend today's order."

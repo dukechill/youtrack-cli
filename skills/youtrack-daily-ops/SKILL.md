@@ -1,6 +1,6 @@
 ---
 name: youtrack-daily-ops
-description: YouTrack daily ticket triage and end-of-day update workflow for Duke Chiu. Use when reviewing assigned tickets, updating State, Boards, Assignee, Priority, or logging concise progress/work items.
+description: YouTrack daily ticket triage, assigned-work inventory, and end-of-day update workflow for Duke Chiu. Use when reviewing assigned tickets, understanding active or pending work, deciding what to do next, updating State, Boards, Assignee, Priority, or logging concise progress/work items.
 ---
 
 # YouTrack Daily Ops
@@ -33,6 +33,25 @@ Use this skill for recurring YouTrack ticket management work.
 - Recommend at most 3 tickets to actively push today.
 - Avoid changing fields during triage unless the current state is clearly stale.
 
+### Work inventory review
+- Use when the user asks what work is currently assigned, in progress, pending, or what should be handled next.
+- Gather assigned tickets from the primary board or query.
+- Infer actual progress from:
+  - YouTrack `State`, `Boards`, `Priority`, recent comments, and work logs
+  - local git branch names containing ticket keys
+  - open PR status when available
+  - local todo notes when available
+- Classify tickets into:
+  - `Active`: work appears started and needs the next execution step
+  - `Pending`: assigned but not clearly started
+  - `Waiting`: blocked, in review, waiting for PM/reviewer/CI, or otherwise not ready for execution
+  - `Stale/unclear`: YouTrack state and available evidence conflict
+- For active tickets, infer the current phase:
+  `discovery`, `implementation`, `testing`, `docs/openapi`, `review`, `ci-fix`, `blocked`, or `ready-to-merge`.
+- Always include the next concrete action, the evidence used for the status, and the ordering reason.
+- Recommend a sequence for today with at most 3 primary tickets.
+- Call out contradictions directly, especially when `State=In Progress` has no branch, PR, recent comment, or local todo evidence.
+
 ### End-of-day sync
 - Focus only on tickets actually touched today.
 - For each touched ticket:
@@ -46,6 +65,14 @@ Use this skill for recurring YouTrack ticket management work.
 - If a branch name includes a ticket key like `CT-4519`, infer that ticket as the candidate issue.
 - If there is an open PR for the ticket branch, set `State` to `Review` unless the user says otherwise.
 - Prefer checking the repo branch name and PR status before asking the user which ticket to update.
+- In work inventory review, use branch and PR evidence to identify started work even if YouTrack fields are stale.
+
+## Ordering rules
+- Prioritize work that unblocks others first: review comments, failing CI, merge blockers, or reviewer/PM questions.
+- Prefer finishing started work that is near completion before pulling in new work.
+- Then prioritize high-priority current-sprint tickets.
+- If a ticket has stale or contradictory state, recommend the smallest clarification step before committing to implementation.
+- Do not let small low-risk tickets displace a primary active ticket unless they unblock the main workflow.
 
 ## Time rules
 - Treat logged work (`Spent time`) and fixed time (`Estimation`) as different fields.
