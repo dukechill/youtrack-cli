@@ -31,6 +31,36 @@ type Sprint struct {
 	// IsCurrent  bool `json:"isCurrent"` // YouTrack API might have this
 }
 
+type IssueInspect struct {
+	Issue     Issue
+	Comments  []IssueComment
+	WorkItems []WorkItem
+	Sprints   []Sprint
+	Links     []IssueLink
+	Warnings  []string
+}
+
+type IssueComment struct {
+	ID      string `json:"id"`
+	Created int64  `json:"created"`
+	Updated int64  `json:"updated"`
+	Text    string `json:"text"`
+	Author  Author `json:"author"`
+}
+
+type IssueLink struct {
+	LinkType IssueLinkType `json:"linkType"`
+	Issues   []Issue       `json:"issues"`
+}
+
+type IssueLinkType struct {
+	Name           string `json:"name"`
+	LocalizedName  string `json:"localizedName"`
+	SourceToTarget string `json:"sourceToTarget"`
+	TargetToSource string `json:"targetToSource"`
+	Directed       bool   `json:"directed"`
+}
+
 type WorkItem struct {
 	Date     int64    `json:"date"`
 	Duration Duration `json:"duration"`
@@ -39,9 +69,11 @@ type WorkItem struct {
 }
 
 type Duration struct {
-	Minutes int `json:"minutes"`
+	Minutes      int    `json:"minutes"`
+	Presentation string `json:"presentation"`
 }
 
 type Author struct {
-	Login string `json:"login"`
+	Login    string `json:"login"`
+	FullName string `json:"fullName"`
 }

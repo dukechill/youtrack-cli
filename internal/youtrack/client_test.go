@@ -127,6 +127,96 @@ func TestListIssueSprints(t *testing.T) {
 	}
 }
 
+func TestInspectIssueFetchesInventoryEvidence(t *testing.T) {
+	t.Parallel()
+
+	requested := map[string]bool{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		requested[r.URL.Path] = true
+
+		switch r.URL.Path {
+		case "/api/issues/CT-123":
+			fields := r.URL.Query().Get("fields")
+			if !strings.Contains(fields, "customFields") {
+				t.Fatalf("unexpected fields: %q", fields)
+			}
+			_, _ = w.Write([]byte(`{
+				"idReadable":"CT-123",
+				"summary":"Inventory review",
+				"customFields":[
+					{"name":"State","value":{"name":"In Progress"}},
+					{"name":"Priority","value":{"name":"Major"}},
+					{"name":"Estimation","value":{"presentation":"2h"}}
+				]
+			}`))
+		case "/api/issues/CT-123/comments":
+			_, _ = w.Write([]byte(`[{
+				"id":"c1",
+				"created":1710000000000,
+				"text":"Today: implemented inspect.",
+				"author":{"login":"duke","fullName":"Duke Chiu"}
+			}]`))
+		case "/api/issues/CT-123/timeTracking/workItems":
+			_, _ = w.Write([]byte(`[{
+				"date":1710003600000,
+				"duration":{"minutes":60,"presentation":"1h"},
+				"text":"Added tests",
+				"author":{"login":"duke","fullName":"Duke Chiu"}
+			}]`))
+		case "/api/issues/CT-123/sprints":
+			_, _ = w.Write([]byte(`[{"id":"s1","name":"sprint 46","isCurrent":true}]`))
+		case "/api/issues/CT-123/links":
+			_, _ = w.Write([]byte(`[{
+				"linkType":{"name":"Depend","localizedName":"depends on"},
+				"issues":[{"idReadable":"CT-456","summary":"Dependency"}]
+			}]`))
+		default:
+			t.Fatalf("unexpected request: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	cfg := config.Config{URL: server.URL, Token: "token"}
+	inspect, err := InspectIssue(cfg, "CT-123")
+	if err != nil {
+		t.Fatalf("InspectIssue returned error: %v", err)
+	}
+
+	if inspect.Issue.ID != "CT-123" || inspect.Issue.Summary != "Inventory review" {
+		t.Fatalf("unexpected issue: %+v", inspect.Issue)
+	}
+	if len(inspect.Comments) != 1 || inspect.Comments[0].Author.FullName != "Duke Chiu" {
+		t.Fatalf("unexpected comments: %+v", inspect.Comments)
+	}
+	if len(inspect.WorkItems) != 1 || inspect.WorkItems[0].Duration.Presentation != "1h" {
+		t.Fatalf("unexpected work items: %+v", inspect.WorkItems)
+	}
+	if len(inspect.Sprints) != 1 || !inspect.Sprints[0].IsCurrent {
+		t.Fatalf("unexpected sprints: %+v", inspect.Sprints)
+	}
+	if len(inspect.Links) != 1 || inspect.Links[0].Issues[0].ID != "CT-456" {
+		t.Fatalf("unexpected links: %+v", inspect.Links)
+	}
+	if len(inspect.Warnings) != 0 {
+		t.Fatalf("unexpected warnings: %+v", inspect.Warnings)
+	}
+
+	for _, path := range []string{
+		"/api/issues/CT-123",
+		"/api/issues/CT-123/comments",
+		"/api/issues/CT-123/timeTracking/workItems",
+		"/api/issues/CT-123/sprints",
+		"/api/issues/CT-123/links",
+	} {
+		if !requested[path] {
+			t.Fatalf("expected request to %s", path)
+		}
+	}
+}
+
 func TestDetermineCurrentSprintUsesCurrentFlag(t *testing.T) {
 	t.Parallel()
 

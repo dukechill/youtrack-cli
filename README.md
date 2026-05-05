@@ -40,6 +40,7 @@ youtrack-cli/
 │  ├─ list.go            # Implements the 'youtrack-cli list' command for listing issues.
 │  ├─ issue/             # Implements issue update commands.
 │  │  ├─ comment.go      # Implements 'youtrack-cli issue comment'.
+│  │  ├─ inspect.go      # Implements 'youtrack-cli issue inspect'.
 │  │  ├─ sprint.go       # Implements 'youtrack-cli issue sprint ...'.
 │  │  ├─ set_estimation.go # Implements 'youtrack-cli issue set-estimation'.
 │  │  ├─ set_state.go    # Implements 'youtrack-cli issue set-state'.
@@ -206,6 +207,14 @@ youtrack-cli work check
 ```bash
 youtrack-cli issue comment DP-123 "Today: finished API wiring. Next: add tests. Risk: none."
 ```
+
+### Inspect Issue Progress Evidence
+
+```bash
+youtrack-cli issue inspect DP-123
+```
+
+This read-only command prints the issue fields, sprint membership, recent comments, recent work items, and linked issues. It is intended for work inventory reviews and deciding the next concrete action.
 
 ### Update Issue State
 

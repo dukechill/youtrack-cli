@@ -16,6 +16,7 @@ Use this skill for recurring YouTrack ticket management work.
   - `youtrack-cli work check`
   - `youtrack-cli work add <issue-id> <minutes> <description>`
   - `youtrack-cli issue comment <issue-id> <text>`
+  - `youtrack-cli issue inspect <issue-id>`
   - `youtrack-cli issue set-estimation <issue-id> <minutes>`
   - `youtrack-cli issue set-state <issue-id> <state>`
   - `youtrack-cli issue daily-sync <issue-id> --minutes <n> --state "<state>" --comment "<text>"`
@@ -41,6 +42,7 @@ Use this skill for recurring YouTrack ticket management work.
   - local git branch names containing ticket keys
   - open PR status when available
   - local todo notes when available
+- Use `youtrack-cli issue inspect <issue-id>` for tickets that need phase or blocker evidence beyond the list summary.
 - Classify tickets into:
   - `Active`: work appears started and needs the next execution step
   - `Pending`: assigned but not clearly started

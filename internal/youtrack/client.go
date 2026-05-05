@@ -210,6 +210,56 @@ func ListIssueSprints(cfg config.Config, issueID string) ([]Sprint, error) {
 	return sprints, nil
 }
 
+// InspectIssue fetches one issue and related read-only evidence for work inventory.
+func InspectIssue(cfg config.Config, issueID string) (IssueInspect, error) {
+	client := NewClient(cfg)
+	result := IssueInspect{}
+
+	escapedIssueID := url.PathEscape(issueID)
+	issueFields := strings.Join([]string{
+		"idReadable",
+		"summary",
+		"customFields(name,value(login,fullName,presentation,name,minutes))",
+	}, ",")
+	issuePath := fmt.Sprintf("/api/issues/%s?fields=%s", escapedIssueID, issueFields)
+	if err := client.get(issuePath, &result.Issue); err != nil {
+		return result, err
+	}
+
+	commentsPath := fmt.Sprintf(
+		"/api/issues/%s/comments?fields=id,created,updated,text,author(login,fullName)",
+		escapedIssueID,
+	)
+	if err := client.get(commentsPath, &result.Comments); err != nil {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("comments: %v", err))
+	}
+
+	workItemsPath := fmt.Sprintf(
+		"/api/issues/%s/timeTracking/workItems?fields=date,duration(minutes,presentation),author(login,fullName),text",
+		escapedIssueID,
+	)
+	if err := client.get(workItemsPath, &result.WorkItems); err != nil {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("work items: %v", err))
+	}
+
+	sprints, err := ListIssueSprints(cfg, issueID)
+	if err != nil {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("sprints: %v", err))
+	} else {
+		result.Sprints = sprints
+	}
+
+	linksPath := fmt.Sprintf(
+		"/api/issues/%s/links?fields=linkType(name,localizedName,sourceToTarget,targetToSource,directed),issues(idReadable,summary)",
+		escapedIssueID,
+	)
+	if err := client.get(linksPath, &result.Links); err != nil {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("links: %v", err))
+	}
+
+	return result, nil
+}
+
 // ApplyCommand applies a YouTrack command to one or more issues.
 func ApplyCommand(cfg config.Config, query string, issueIDs []string) error {
 	client := NewClient(cfg)
@@ -578,6 +628,157 @@ func PrintIssueSprints(issueID string, sprints []Sprint) {
 		}
 		fmt.Printf("%s %s\n", marker, sprint.Name)
 	}
+}
+
+// PrintIssueInspect prints issue details and recent evidence for progress review.
+func PrintIssueInspect(result IssueInspect) {
+	issue := result.Issue
+	fmt.Printf("%s: %s\n", issue.ID, issue.Summary)
+	fmt.Println()
+
+	fmt.Println("Fields:")
+	printField("Type", customFieldPresentation(issue.CustomFields, "Type"))
+	printField("State", customFieldPresentation(issue.CustomFields, "State"))
+	printField("Priority", customFieldPresentation(issue.CustomFields, "Priority"))
+	printField("Assignee", customFieldPresentation(issue.CustomFields, "Assignee", "Assignee(s)"))
+	printField("Estimation", customFieldPresentation(issue.CustomFields, "Estimation"))
+	printField("Spent time", customFieldPresentation(issue.CustomFields, "Spent time"))
+	fmt.Println()
+
+	fmt.Println("Sprints:")
+	if len(result.Sprints) == 0 {
+		fmt.Println("  (none)")
+	} else {
+		for _, sprint := range result.Sprints {
+			suffix := ""
+			if sprint.IsCurrent {
+				suffix = " [current]"
+			}
+			fmt.Printf("  - %s%s\n", sprint.Name, suffix)
+		}
+	}
+	fmt.Println()
+
+	fmt.Println("Recent comments:")
+	if len(result.Comments) == 0 {
+		fmt.Println("  (none)")
+	} else {
+		for _, comment := range lastIssueComments(result.Comments, 5) {
+			fmt.Printf("  - %s %s: %s\n", formatMillis(comment.Created), authorName(comment.Author), compactText(comment.Text, 180))
+		}
+	}
+	fmt.Println()
+
+	fmt.Println("Recent work items:")
+	if len(result.WorkItems) == 0 {
+		fmt.Println("  (none)")
+	} else {
+		for _, item := range lastWorkItems(result.WorkItems, 5) {
+			duration := item.Duration.Presentation
+			if duration == "" && item.Duration.Minutes > 0 {
+				duration = HumanizeDuration(time.Duration(item.Duration.Minutes) * time.Minute)
+			}
+			fmt.Printf("  - %s %s %s: %s\n", formatMillis(item.Date), duration, authorName(item.Author), compactText(item.Text, 180))
+		}
+	}
+	fmt.Println()
+
+	fmt.Println("Links:")
+	if len(result.Links) == 0 {
+		fmt.Println("  (none)")
+	} else {
+		printedLinks := 0
+		for _, link := range result.Links {
+			label := link.LinkType.LocalizedName
+			if label == "" {
+				label = link.LinkType.Name
+			}
+			if label == "" {
+				label = link.LinkType.TargetToSource
+			}
+			if label == "" {
+				label = "linked"
+			}
+			for _, linkedIssue := range link.Issues {
+				fmt.Printf("  - %s: %s %s\n", label, linkedIssue.ID, linkedIssue.Summary)
+				printedLinks++
+			}
+		}
+		if printedLinks == 0 {
+			fmt.Println("  (none)")
+		}
+	}
+
+	if len(result.Warnings) > 0 {
+		fmt.Println()
+		fmt.Println("Warnings:")
+		for _, warning := range result.Warnings {
+			fmt.Printf("  - %s\n", warning)
+		}
+	}
+}
+
+func printField(name, value string) {
+	if value == "" {
+		value = "N/A"
+	}
+	fmt.Printf("  %-12s %s\n", name+":", value)
+}
+
+func customFieldPresentation(fields []CustomField, names ...string) string {
+	for _, wanted := range names {
+		for _, cf := range fields {
+			if cf.Name == wanted {
+				if names := extractAssigneeNames(cf.Value); len(names) > 0 {
+					return strings.Join(names, ", ")
+				}
+				return presentation(cf.Value)
+			}
+		}
+	}
+	return ""
+}
+
+func authorName(author Author) string {
+	if author.FullName != "" {
+		return author.FullName
+	}
+	if author.Login != "" {
+		return author.Login
+	}
+	return "unknown"
+}
+
+func formatMillis(ms int64) string {
+	if ms <= 0 {
+		return "unknown-date"
+	}
+	return time.UnixMilli(ms).Format("2006-01-02 15:04")
+}
+
+func compactText(text string, maxLen int) string {
+	cleaned := strings.Join(strings.Fields(text), " ")
+	if len(cleaned) <= maxLen {
+		return cleaned
+	}
+	if maxLen <= 3 {
+		return cleaned[:maxLen]
+	}
+	return cleaned[:maxLen-3] + "..."
+}
+
+func lastIssueComments(comments []IssueComment, limit int) []IssueComment {
+	if len(comments) <= limit {
+		return comments
+	}
+	return comments[len(comments)-limit:]
+}
+
+func lastWorkItems(items []WorkItem, limit int) []WorkItem {
+	if len(items) <= limit {
+		return items
+	}
+	return items[len(items)-limit:]
 }
 
 // parseEstimation parses a YouTrack estimation string (e.g., "3h", "2d 4h", "45m") into a time.Duration.
