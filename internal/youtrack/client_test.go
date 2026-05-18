@@ -43,11 +43,11 @@ func TestSetIssueSprintPostsCommand(t *testing.T) {
 	defer server.Close()
 
 	cfg := config.Config{URL: server.URL, Token: "token"}
-	if err := SetIssueSprint(cfg, "CT-123", "CRM促案管理", "sprint 45"); err != nil {
+	if err := SetIssueSprint(cfg, "CT-123", " CRM促案管理 ", " sprint 45 "); err != nil {
 		t.Fatalf("SetIssueSprint returned error: %v", err)
 	}
 
-	if gotQuery != `Board "CRM促案管理" "sprint 45"` {
+	if gotQuery != `board CRM促案管理 sprint 45` {
 		t.Fatalf("unexpected query: %q", gotQuery)
 	}
 	if gotIssueID != "CT-123" {

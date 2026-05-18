@@ -294,7 +294,7 @@ func SetIssuesSprint(cfg config.Config, issueIDs []string, boardName, sprintName
 		return fmt.Errorf("at least one issue id is required")
 	}
 
-	query := fmt.Sprintf("Board %s %s", strconv.Quote(boardName), strconv.Quote(sprintName))
+	query := fmt.Sprintf("board %s %s", strings.TrimSpace(boardName), strings.TrimSpace(sprintName))
 	return ApplyCommand(cfg, query, issueIDs)
 }
 

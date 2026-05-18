@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,8 +36,8 @@ func Load() (Config, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return cfg, fmt.Errorf("config file not found at %s, please run 'youtrack-cli configure' or 'youtrack-cli config set'", path)
+		if errors.Is(err, os.ErrNotExist) {
+			return cfg, fmt.Errorf("config file not found at %s, please run 'youtrack-cli config configure' or 'youtrack-cli config set': %w", path, err)
 		}
 		return cfg, fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -59,6 +60,12 @@ func Save(cfg Config) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
+	// Ensure the directory exists before writing the file
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("failed to create config directory %s: %w", dir, err)
+	}
+
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file to %s: %w", path, err)
 	}
@@ -70,7 +77,7 @@ func SetValue(key, value string) error {
 	cfg, err := Load()
 	if err != nil {
 		// If config doesn't exist, create a new one
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			cfg = Config{}
 		} else {
 			return err
